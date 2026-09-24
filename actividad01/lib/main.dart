@@ -10,61 +10,86 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Lista viva DMI',
+      title: 'Tablero de tareas',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
         useMaterial3: true,
       ),
-      home: const ListaVivaPage(title: 'Equipo 10A — Lista viva'),
+      home: const TableroPage(title: 'Tareas'),
     );
   }
 }
 
-class ListaVivaPage extends StatefulWidget {
-  const ListaVivaPage({super.key, required this.title});
+class Tarea {
+  String titulo;
+  bool completada;
+
+  Tarea({required this.titulo, this.completada = false});
+}
+
+class TableroPage extends StatefulWidget {
+  const TableroPage({super.key, required this.title});
 
   final String title;
 
   @override
-  State<ListaVivaPage> createState() => _ListaVivaPageState();
+  State<TableroPage> createState() => _TableroPageState();
 }
 
-class _ListaVivaPageState extends State<ListaVivaPage> {
-  final List<String> _nombres = ['Alexa', 'Diego', 'Rocío', 'Adrián', 'Antonio'];
-  final List<int> _puntos = [0, 0, 0, 0, 0];
+class _TableroPageState extends State<TableroPage> {
+  final List<Tarea> _tareas = [
+    Tarea(titulo: 'Subir captura de la lista viva'),
+    Tarea(titulo: 'Responder autoevaluación'),
+    Tarea(titulo: 'Tarea 3'),
+  ];
 
-  void _sumar(int index) {
+
+  bool _soloPendientes = false;
+  int _siguiente = 4;
+
+  // Marca o desmarca usando el índice REAL de _tareas
+  void _alternar(int indiceReal) {
     setState(() {
-      _puntos[index]++;
+      _tareas[indiceReal].completada = !_tareas[indiceReal].completada;
     });
   }
 
-  void _restar(int index) {
+  void _eliminar(int indiceReal) {
     setState(() {
-      if (_puntos[index] > 0) {
-        _puntos[index]--;
-      }
+      _tareas.removeAt(indiceReal);
     });
   }
 
   void _agregar() {
     setState(() {
-      _nombres.add('Integrante ${_nombres.length + 1}');
-      _puntos.add(0);
+      _tareas.add(Tarea(titulo: 'Tarea $_siguiente'));
+      _siguiente++;
     });
   }
 
-  void _resetPuntos() {
+  void _cambiarFiltro(bool valor) {
     setState(() {
-      for (var i = 0; i < _puntos.length; i++) {
-        _puntos[i] = 0;
+      _soloPendientes = valor;
+    });
+  }
+
+  void _resetTareas() {
+    setState(() {
+      for (final tarea in _tareas) {
+        tarea.completada = false;
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final total = _puntos.fold<int>(0, (a, b) => a + b);
+    final completadas = _tareas.where((t) => t.completada).length;
+
+    // Si el filtro está activo, solo entran las pendientes.
+    final indicesVisibles = <int>[
+      for (var i = 0; i < _tareas.length; i++)
+        if (!_soloPendientes || !_tareas[i].completada) i,
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -73,8 +98,8 @@ class _ListaVivaPageState extends State<ListaVivaPage> {
         centerTitle: true,
         actions: [
           IconButton(
-            tooltip: 'Poner puntos en cero',
-            onPressed: _resetPuntos,
+            tooltip: 'Desmarcar todas',
+            onPressed: _resetTareas,
             icon: const Icon(Icons.restart_alt),
           ),
         ],
@@ -87,46 +112,61 @@ class _ListaVivaPageState extends State<ListaVivaPage> {
               children: [
                 Expanded(
                   child: Text(
-                    'Integrantes: ${_nombres.length}',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    'Completadas: $completadas / ${_tareas.length}',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-                Text(
-                  'Total: $total',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                const Text('Solo pendientes'),
+                const SizedBox(width: 8),
+                Switch(
+                  value: _soloPendientes,
+                  onChanged: _cambiarFiltro,
                 ),
               ],
             ),
           ),
           const Divider(height: 1),
           Expanded(
-            child: ListView.builder(
-              itemCount: _nombres.length,
+            child: indicesVisibles.isEmpty
+                ? Center(
+              child: Text(
+                _soloPendientes
+                    ? 'No hay tareas pendientes'
+                    : 'No hay tareas',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            )
+                : ListView.builder(
+              itemCount: indicesVisibles.length,
               itemBuilder: (context, index) {
+                final indiceReal = indicesVisibles[index];
+                final tarea = _tareas[indiceReal];
+
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   child: ListTile(
-                    leading: CircleAvatar(
-                      child: Text('${index + 1}'),
+                    leading: Checkbox(
+                      value: tarea.completada,
+                      onChanged: (_) => _alternar(indiceReal),
                     ),
-                    title: Text(_nombres[index]),
-                    subtitle: Text('Puntos: ${_puntos[index]}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: 'Restar',
-                          onPressed: () => _restar(index),
-                          icon: const Icon(Icons.remove_circle_outline),
-                        ),
-                        IconButton(
-                          tooltip: 'Sumar',
-                          onPressed: () => _sumar(index),
-                          icon: const Icon(Icons.add_circle_outline),
-                        ),
-                      ],
+                    title: Text(
+                      tarea.titulo,
+                      style: TextStyle(
+                        decoration: tarea.completada
+                            ? TextDecoration.lineThrough
+                            : TextDecoration.none,
+                        color: tarea.completada ? Colors.grey : null,
+                      ),
+                    ),
+                    trailing: IconButton(
+                      tooltip: 'Eliminar',
+                      onPressed: () => _eliminar(indiceReal),
+                      icon: const Icon(Icons.delete_outline),
                     ),
                   ),
                 );
@@ -137,7 +177,7 @@ class _ListaVivaPageState extends State<ListaVivaPage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _agregar,
-        icon: const Icon(Icons.person_add),
+        icon: const Icon(Icons.add_task),
         label: const Text('Agregar'),
       ),
     );
